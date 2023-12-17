@@ -107,6 +107,23 @@ public class ModernCipher {
 		throw new Throwable("not encrypting or decrypting?");
 	}
 	
+	private String masterEncryptDecryptText(int mode, String text) throws Throwable {
+		SecretKey secretKey = new SecretKeySpec(masterKey.getBytes(), masterAlgorithm);
+		Cipher cipher = Cipher.getInstance(masterAlgorithm);
+		
+		if (mode == Cipher.ENCRYPT_MODE) {
+			cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+			byte[] encryptedBytes = cipher.doFinal(text.getBytes(StandardCharsets.UTF_8));
+	        return Base64.getEncoder().encodeToString(encryptedBytes);
+		}
+		else if (mode == Cipher.DECRYPT_MODE) {
+			cipher.init(Cipher.DECRYPT_MODE, secretKey);
+			byte[] decryptedBytes = cipher.doFinal(Base64.getDecoder().decode(text));
+	        return new String(decryptedBytes, StandardCharsets.UTF_8);
+		}
+		throw new Throwable("not encrypting or decrypting?");
+	}
+	
 	private void copyStream(InputStream input, OutputStream output) throws IOException {
 		byte[] bytes = new byte[64];
 		int numBytes = input.read(bytes);
@@ -146,28 +163,17 @@ public class ModernCipher {
 		return new Key(keyString, algorithm);
 	}
 	
-	// this should be implemented in a smarter way, but I am too tired to do that
 	public Key encryptKey() throws Throwable {
-		String thisKeyStore = this.key;
-		String thisAlgorithmStore = this.algorithm;
-		this.key = masterKey;
-		this.algorithm = masterAlgorithm;
-		String encryptedKey = encryptText(thisKeyStore);
-		String encryptedAlgorithm = encryptText(thisAlgorithmStore);
-		this.key = thisKeyStore;
-		this.algorithm = thisAlgorithmStore;
+		String encryptedKey = masterEncryptDecryptText(Cipher.ENCRYPT_MODE, key);
+		String encryptedAlgorithm = masterEncryptDecryptText(Cipher.ENCRYPT_MODE, algorithm);
 		return new Key(encryptedKey, encryptedAlgorithm);
 	}
 	
-	// this should be implemented in a smarter way, but I am too tired to do that
-	public String decryptKey(String encryptedExternalKey) throws Throwable {
-		String thisKeyStore = this.key;
-		String thisAlgorithmStore = this.algorithm;
-		this.key = masterKey;
-		this.algorithm = masterAlgorithm;
-		String decryptedKey = decryptText(encryptedExternalKey);
-		this.key = thisKeyStore;
-		this.algorithm = thisAlgorithmStore;
-		return decryptedKey;
+	public String masterEncryptString(String text) throws Throwable {
+		return masterEncryptDecryptText(Cipher.ENCRYPT_MODE, text);
+	}
+	
+	public String masterDecryptString(String text) throws Throwable {
+		return masterEncryptDecryptText(Cipher.DECRYPT_MODE, text);
 	}
 }

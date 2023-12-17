@@ -19,17 +19,22 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.io.File;
 
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
+import javafx.scene.control.ColorPicker;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.image.Image;
+import javafx.scene.layout.Background;
+import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -43,6 +48,9 @@ import javafx.scene.text.TextAlignment;
 public class Main extends Application {
 	private Stage primaryStage;
 	private String currentUser;
+	private String lastKey;
+	private final String firebaseProjectId = "cloudsecurityassignment";
+	private static final String iconName = "icon.png";
 	@Override
 	public void start(Stage primaryStage) {
 		try {
@@ -53,7 +61,7 @@ public class Main extends Application {
 			
 			changeScene(loginScene());
 			primaryStage.setTitle("Cloud Security");
-			primaryStage.getIcons().add(new Image(new FileInputStream(new File("icon.png"))));
+			primaryStage.getIcons().add(new Image(new FileInputStream(new File(iconName))));
 			primaryStage.show();
 		} 
 		catch(Exception exception) {
@@ -137,8 +145,17 @@ public class Main extends Application {
 	public Scene mainScene() {
 		BorderPane mainPane = new BorderPane();
 		mainPane.setCenter(affineBox());
-		VBox sideMenu = new VBox();
+		GridPane sideMenu = new GridPane();
 		sideMenu.setAlignment(Pos.CENTER);
+		
+		try {
+			Background background = DatabaseConnector.loadBackgroundFromDatabase(currentUser);
+			mainPane.setBackground(background);
+		}
+		catch (Throwable exception) {
+			exception.printStackTrace();
+		}
+		
 		
 		Button affineButton = new Button("Affine Cipher");
 		sideMenu.getChildren().add(affineButton);
@@ -152,20 +169,78 @@ public class Main extends Application {
 		sideMenu.getChildren().add(AESButton);
 		AESButton.setOnAction(new ChangeAlgorithmEventHandler(modernEncryptionBox("AES"), mainPane));
 		
-		Button settingsButton = new Button("Settings");
-		sideMenu.getChildren().add(settingsButton);
-		settingsButton.setOnAction(new EventHandler<ActionEvent>() {
+		Button loadMessagesButton = new Button("Load Messages");
+		sideMenu.getChildren().add(loadMessagesButton);
+		loadMessagesButton.setOnAction(new EventHandler<ActionEvent>() {
 
 			@Override
 			public void handle(ActionEvent event) {
-				Alert settingsAlert = new Alert(Alert.AlertType.INFORMATION);
-				settingsAlert.setTitle("Settings");
-				settingsAlert.setHeaderText("");
-				settingsAlert.setGraphic(settingsVBox());
-				settingsAlert.showAndWait();
+				Alert messagesAlert = new Alert(Alert.AlertType.INFORMATION);
+				messagesAlert.setTitle("Saved Messages");
+				messagesAlert.setHeaderText("");
+				VBox messagesBox = new VBox();
+				try {
+					ArrayList<String> messages = DatabaseConnector.loadMessagesFromDatabase(currentUser);
+					if (messages.isEmpty()) {
+						Text errorText = new Text("No messages were found");
+						errorText.setFill(Color.RED);
+						messagesBox.getChildren().add(errorText);
+					}
+					else {
+						for (String message : messages) {
+							messagesBox.getChildren().add(new Text(message));
+						}
+					}
+				}
+				catch (Throwable exception) {
+//					exception.printStackTrace();
+					Text errorText = new Text("A connection error has occured");
+					errorText.setFill(Color.RED);
+					messagesBox.getChildren().add(errorText);
+				}
+				messagesAlert.setGraphic(messagesBox);
+				messagesAlert.showAndWait();
 			}
 			
 		});
+		
+		ColorPicker backgroundPicker = new ColorPicker();
+		sideMenu.getChildren().add(backgroundPicker);
+		backgroundPicker.setOnAction(new BackgroundColourEventHandler(mainPane, backgroundPicker, currentUser));
+		
+		Button imageBackgroundButton = new Button("secret image background");
+		sideMenu.getChildren().add(imageBackgroundButton);
+		imageBackgroundButton.setOnAction(new BackgroundImageEventHandler(mainPane, currentUser));
+		
+//		Button settingsButton = new Button("Settings");
+//		sideMenu.getChildren().add(settingsButton);
+//		settingsButton.setOnAction(new EventHandler<ActionEvent>() {
+//
+//			@Override
+//			public void handle(ActionEvent event) {
+//				Alert settingsAlert = new Alert(Alert.AlertType.INFORMATION);
+//				settingsAlert.setTitle("Settings");
+//				settingsAlert.setHeaderText("");
+//				settingsAlert.setGraphic(settingsBox());
+//				settingsAlert.showAndWait();
+//			}
+//			
+//		});
+		
+		GridPane.setColumnIndex(affineButton, 0);
+		GridPane.setColumnIndex(DESButton, 0);
+		GridPane.setColumnIndex(AESButton, 0);
+		GridPane.setColumnIndex(loadMessagesButton, 0);
+		GridPane.setColumnIndex(backgroundPicker, 0);
+		GridPane.setColumnIndex(imageBackgroundButton, 0);
+//		GridPane.setColumnIndex(settingsButton, 0);
+		GridPane.setRowIndex(affineButton, 0);
+		GridPane.setRowIndex(DESButton, 1);
+		GridPane.setRowIndex(AESButton, 2);
+		GridPane.setRowIndex(loadMessagesButton, 3);
+		GridPane.setRowIndex(backgroundPicker, 4);
+		GridPane.setRowIndex(imageBackgroundButton, 5);
+//		GridPane.setRowIndex(settingsButton, 4);
 		
 		mainPane.setLeft(sideMenu);
 		Scene mainScene = new Scene(mainPane);
@@ -173,13 +248,37 @@ public class Main extends Application {
 		return mainScene;
 	}
 	
-	public VBox settingsVBox() {
-		VBox settingsVBox = new VBox();
-		Text temp = new Text("Temp");
-		settingsVBox.getChildren().add(temp);
-		
-		return settingsVBox;
-	}
+//	public GridPane settingsBox() {
+//		GridPane settingsBox = new GridPane();
+////		Text temp = new Text("Temp");
+//		
+//		ColorPicker backgroundPicker = new ColorPicker();
+//		Button iconButton = new Button("Change to image background");
+//		settingsBox.getChildren().addAll(iconButton, backgroundPicker);
+//		GridPane.setColumnIndex(backgroundPicker, 0);
+//		GridPane.setColumnIndex(iconButton, 1);
+//		
+//		iconButton.setOnAction(new EventHandler<ActionEvent>() {
+//			@Override
+//			public void handle(ActionEvent event) {
+////				primaryStage.getScene().setFill();
+//				Alert alert = new Alert(AlertType.INFORMATION);
+//				alert.showAndWait();
+//			}
+//		});
+//		backgroundPicker.setOnAction(new EventHandler<ActionEvent>() {
+//			@Override
+//			public void handle(ActionEvent event) {
+//				primaryStage.getScene().setFill(backgroundPicker.getValue());
+//				primaryStage.close();
+//				Alert alert = new Alert(AlertType.INFORMATION);
+//				alert.showAndWait();
+//				primaryStage.show();
+//			}
+//		});
+//		
+//		return settingsBox;
+//	}
 	
 	public VBox modernEncryptionBox(String algorithm) {
 		VBox encryptionBox = new VBox();
@@ -187,6 +286,7 @@ public class Main extends Application {
 		algorithmText.setFont(new Font(26));
 		algorithmText.setUnderline(true);
 		encryptionBox.getChildren().add(algorithmText);
+		
 		
 		GridPane encryptPane = new GridPane();
 		encryptionBox.getChildren().add(encryptPane);
@@ -203,11 +303,13 @@ public class Main extends Application {
 		GridPane.setRowIndex(inputTextField, 0);
 		GridPane.setRowIndex(inputText, 0);
 		
+		
 		Text keyText = new Text("Text Key ");
 		TextField keyField = new TextField();
 		keyField.setPromptText("text key");
 		String defaultText = "";
 		int defaultLength = 0;
+		
 		if (algorithm.equals("DES")) {
 			keyField.setTextFormatter(generateModernKeyFormatter(8));
 			defaultLength = 8;
@@ -219,29 +321,24 @@ public class Main extends Application {
 		for (int i=0; i<defaultLength; i++) {
 			defaultText += "*";
 		}
+		
 		keyField.setText(defaultText);
 		Button saveLoadKeyButton = new Button("Save/Load Key");
-//		Button saveKeyButton = new Button("Save Key");
-//		Button loadKeyButton = new Button("Load Key");
 		encryptPane.getChildren().add(keyField);
 		encryptPane.getChildren().add(keyText);
 		encryptPane.getChildren().add(saveLoadKeyButton);
-//		encryptPane.getChildren().add(saveKeyButton);
-//		encryptPane.getChildren().add(loadKeyButton);
 		GridPane.setColumnIndex(keyField, 1);
 		GridPane.setColumnIndex(keyText, 0);
 		GridPane.setColumnIndex(saveLoadKeyButton, 2);
-//		GridPane.setColumnIndex(saveKeyButton, 2);
-//		GridPane.setColumnIndex(loadKeyButton, 3);
 		GridPane.setRowIndex(keyText, 1);
 		GridPane.setRowIndex(keyField, 1);
 		GridPane.setRowIndex(saveLoadKeyButton, 1);
-//		GridPane.setRowIndex(loadKeyButton, 1);
-//		GridPane.setRowIndex(saveKeyButton, 1);
+		
 		
 		GridPane encryptDecryptPane = new GridPane();
 		encryptionBox.getChildren().add(encryptDecryptPane);
 		encryptDecryptPane.setAlignment(Pos.CENTER);
+		
 		
 		Button encryptButton = new Button("Encrypt");
 		encryptDecryptPane.getChildren().add(encryptButton);
@@ -251,31 +348,36 @@ public class Main extends Application {
 		encryptDecryptPane.getChildren().add(decryptButton);
 		GridPane.setColumnIndex(encryptButton, 1);
 		
+		
 		Text resultText = new Text();
 		encryptionBox.getChildren().add(resultText);
+		Button saveMessageButton = new Button("Save encrypted message");
+		saveMessageButton.setVisible(false);
+		encryptionBox.getChildren().add(saveMessageButton);
 		
 		encryptButton.setOnAction(new EventHandler<ActionEvent>() {
-
 			@Override
 			public void handle(ActionEvent event) {
 				ModernCipher cipher = new ModernCipher(algorithm, keyField.getText());
 				try {
 					resultText.setText(cipher.encryptText(inputTextField.getText()));
 					resultText.setFill(Color.BLACK);
+					lastKey = keyField.getText();
+					saveMessageButton.setVisible(true);
 				}
 				catch (Throwable exception) {
 //					exception.printStackTrace();
+					saveMessageButton.setVisible(false);
 					resultText.setText("Error: Input text could not be encrypted with " + algorithm);
 					resultText.setFill(Color.RED);
 				}
 			}
-			
 		});
 		decryptButton.setOnAction(new EventHandler<ActionEvent>() {
-
 			@Override
 			public void handle(ActionEvent event) {
 				ModernCipher cipher = new ModernCipher(algorithm, keyField.getText());
+				saveMessageButton.setVisible(false);
 				try {
 					resultText.setText(cipher.decryptText(inputTextField.getText()));
 					resultText.setFill(Color.BLACK);
@@ -286,30 +388,23 @@ public class Main extends Application {
 					resultText.setFill(Color.RED);
 				}
 			}
-			
 		});
-//		loadKeyButton.setOnAction(new EventHandler<ActionEvent>() {
-//
-//			@Override
-//			public void handle(ActionEvent event) {
-//				try {
-//					Key loadedKey = ModernCipher.loadKeyFromFile("key file");
-//					if (algorithm.equals(loadedKey.getAlgorithm())) {
-//						keyField.setText(loadedKey.getKey());
-//					}
-//					else {
-//						resultText.setText("This key is for a different algorithm");
-//						resultText.setFill(Color.RED);
-//					}
-//				}
-//				catch (IOException exception) {
-//					resultText.setText("Couldn't load key");
-//					resultText.setFill(Color.RED);
-//				}
-//			}
-//			
-//		});
 		saveLoadKeyButton.setOnAction(new SaveLoadKeyHandler(currentUser, keyField, algorithm));
+		saveMessageButton.setOnAction(new EventHandler<ActionEvent>() {
+			@Override
+			public void handle(ActionEvent event) {
+				saveMessageButton.setVisible(false);
+				try {
+					DatabaseConnector.saveMessageToDatabase(algorithm, lastKey, currentUser, resultText.getText());
+					resultText.setText("Saved");
+				}
+				catch (Throwable exception) { 
+//					exception.printStackTrace();
+					resultText.setText("Error: Failed to save message");
+					resultText.setFill(Color.RED);
+				}
+			}
+		});
 		
 		return encryptionBox;
 	}
@@ -336,30 +431,30 @@ public class Main extends Application {
 		GridPane.setRowIndex(inputTextField, 0);
 		GridPane.setRowIndex(inputText, 0);
 		
-		GridPane affineKeyPane = new GridPane();
-		affineBox.getChildren().add(affineKeyPane);
-		affineKeyPane.setAlignment(Pos.CENTER);
+//		GridPane affineKeyPane = new GridPane();
+//		affineBox.getChildren().add(affineKeyPane);
+//		affineKeyPane.setAlignment(Pos.CENTER);
 		
 		
-		Text multKeyText = new Text("a ");
+		Text multKeyText = new Text("a coefficient ");
 		TextField multKeyField = new TextField();
 		multKeyField.setPromptText("a key");
-		affineKeyPane.getChildren().add(multKeyField);
-		affineKeyPane.getChildren().add(multKeyText);
-		GridPane.setColumnIndex(multKeyField, 0);
+		encryptPane.getChildren().add(multKeyField);
+		encryptPane.getChildren().add(multKeyText);
+		GridPane.setColumnIndex(multKeyField, 1);
 		GridPane.setColumnIndex(multKeyText, 0);
 		GridPane.setRowIndex(multKeyField, 1);
-		GridPane.setRowIndex(multKeyText, 0);
+		GridPane.setRowIndex(multKeyText, 1);
 		
-		Text addKeyText = new Text("b ");
+		Text addKeyText = new Text("b coefficient ");
 		TextField addKeyField = new TextField();
 		addKeyField.setPromptText("b key");
-		affineKeyPane.getChildren().add(addKeyField);
-		affineKeyPane.getChildren().add(addKeyText);
+		encryptPane.getChildren().add(addKeyField);
+		encryptPane.getChildren().add(addKeyText);
 		GridPane.setColumnIndex(addKeyField, 1);
-		GridPane.setColumnIndex(addKeyText, 1);
-		GridPane.setRowIndex(addKeyField, 1);
-		GridPane.setRowIndex(addKeyText, 0);
+		GridPane.setColumnIndex(addKeyText, 0);
+		GridPane.setRowIndex(addKeyField, 2);
+		GridPane.setRowIndex(addKeyText, 2);
 		
 		multKeyField.setTextFormatter(generateAffineKeyFormatter());
 		addKeyField.setTextFormatter(generateAffineKeyFormatter());
@@ -494,5 +589,6 @@ public class Main extends Application {
 	
 	public static void main(String[] args) {
 		launch(args);
+//		DatabaseConnector.testFirebase();
 	}
 }

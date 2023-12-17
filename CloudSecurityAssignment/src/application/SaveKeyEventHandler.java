@@ -51,7 +51,7 @@ public class SaveKeyEventHandler implements EventHandler<ActionEvent> {
 			resultAlert.setHeaderText("Key successfully saved");
 		}
 		catch (Throwable exception) {
-			exception.printStackTrace();
+//			exception.printStackTrace();
 			resultAlert = new Alert(AlertType.ERROR);
 			resultAlert.setHeaderText("Failed to save key");
 		}
